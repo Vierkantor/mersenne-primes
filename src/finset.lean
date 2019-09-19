@@ -16,39 +16,9 @@ universes u1 u2 u3
 variables {α : Type u1} {β : Type u2} {γ : Type u3}
 @[simp]
 lemma uncurry_prod_mk {a : α} {b : β} {f : α → β → γ} : uncurry f (prod.mk a b) = f a b := by unfold uncurry
-
-@[simp]
-lemma multiset.map_empty {f : α → β} : multiset.map f (∅ : finset α).val = 0 := by simp
-@[simp]
-lemma multiset.sum_empty : multiset.sum (∅ : finset ℕ).val = 0 := by simp
-
-variable [decidable_eq α]
-@[simp]
-lemma multiset.erase_dup_repeat {a : α} : Π{n : ℕ}, n > 0 → multiset.erase_dup (multiset.repeat a n) = singleton a
-| 0 pos := by rcases pos
-| 1 pos := by simp
-| (n+2) pos := begin
-  have : n+1 > 0 := nat.succ_pos n,
-  have : multiset.erase_dup (multiset.repeat a (n+1)) = singleton a := multiset.erase_dup_repeat this,
-  have : a ∈ multiset.repeat a (n+1) := by simp,
-  rw [multiset.repeat_succ, multiset.erase_dup_cons_of_mem this],
-  assumption
-end
 end helpers
 
 namespace finset
-/- insert -/
-section insert
-universe u
-variables {α β : Type u} [decidable_eq α] [decidable_eq β]
-@[simp]
-lemma product_insert {a : α} {s : finset α} {t : finset β} : (insert a s).product t = t.image(λ x, ⟨a, x⟩) ∪ s.product t := begin
-  ext ⟨x, y⟩,
-  rw [mem_product, mem_union, mem_image, mem_insert],
-  split; finish
-end
-end insert
-
 /- injections -/
 section injection
 universe u
@@ -106,16 +76,6 @@ lemma injection_of_bijection : is_bijection f s t → is_injection_to f s t := �
   calc
     x = x'' : unique x ⟨x_in_s, refl _⟩
   ... = x' : symm (unique x' ⟨x'_in_s, symm fx_is_fx'⟩)⟩
-
-@[simp]
-lemma product_empty_left {s : finset β} : (∅ : finset α).product s = ∅ := refl _
-lemma bijection_empty {u : finset β} : is_bijection f ∅ u -> u = ∅ := begin
-  intro bij,
-  apply eq_empty_of_forall_not_mem,
-  intros y y_in_u,
-  obtain ⟨x, ⟨⟨x_in_empty, _⟩, _⟩⟩ := bij.2 y y_in_u,
-  exact not_mem_empty x x_in_empty
-end
 
 lemma bijection_to_image [decidable_eq β] {s : finset α} {t : finset β} : is_bijection f s t -> s.image f = t := begin
   intro bij,

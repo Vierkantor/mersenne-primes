@@ -4,6 +4,20 @@ import data.nat.basic
 
 import nat
 
+section tactics
+open tactic.interactive («apply» cases contradiction «have» «intro» «intros» «suffices»)
+open interactive (parse)
+open interactive.types (texpr)
+open lean.parser (ident many tk)
+
+meta def tactic.interactive.decide : parse (prod.mk <$> ident <* tk ":" <*> texpr) -> tactic unit
+| ⟨h , p⟩ := do
+  «have» (some h) (some ``(%%p ∨ ¬ %%p)) ``(dec_em %%p),
+  local_h <- tactic.get_local h,
+  cases (none, ``(%%local_h)) [h]
+end tactics
+
+
 namespace nat.divisor
 open nat
 
@@ -78,5 +92,74 @@ lemma divisor_sum_prime {p : ℕ} : prime p -> σ p = 1 + p := λ pr, calc
   ... = (range (1+1)).sum (λ n, p^n) : divisor_sum_prime_power pr
   ... = 1 + p^1 : refl _
   ... = 1 + p : by simp
+
+lemma mul_gt_one {a b : ℕ} : a > 1 -> b > 0 -> a * b > b := λ a_gt_one b_pos,
+  calc b = 1 * b : symm (one_mul _)
+  ... < a * b : nat.mul_lt_mul_of_pos_right a_gt_one b_pos
+
+lemma divide_out_factors (p : ℕ) (pr : prime p) : Π (n : ℕ), n > 0 → ∃ k l : ℕ, p^k * l = n ∧ nat.coprime p l
+| n n_pos := begin
+  decide h : p ∣ n,
+  { have p_pos : p > 0 := (have this : p ≥ 2 := nat.prime.two_le pr, by linarith),
+    have : n ≥ p := nat.le_of_dvd n_pos h,
+    have next_pos : n / p > 0 := nat.div_pos this p_pos,
+    let recursion_helper : n / p < n := nat.div_lt_of_lt_mul (mul_gt_one (nat.prime.two_le pr) n_pos),
+    rcases divide_out_factors (n / p) next_pos with ⟨k, l, prod, copr⟩,
+    use (nat.succ k),
+    use l,
+    split,
+    { rw [nat.pow_succ, mul_comm (p^k) p, mul_assoc, prod, ←nat.mul_div_assoc _ h, nat.mul_div_cancel_left _ p_pos] },
+    assumption },
+  use 0,
+  use n,
+  simp,
+  exact (nat.prime.coprime_iff_not_dvd pr).mpr h,
+end using_well_founded {rel_tac := λ _ _, `[exact ⟨_, measure_wf psigma.fst⟩]}
+
+lemma divisor_sum_ge {n : ℕ} (ds : list ℕ) : n > 0 -> (∀ d ∈ ds, d ∣ n) -> multiset.nodup ds -> σ n ≥ ds.sum := begin
+  unfold σ,
+  intros n_pos divs nd,
+  let ds' : finset ℕ := ⟨ds, nd⟩,
+  have : ds' ⊆ (divisors n) := finset.subset_iff.mpr (λ d d_in, (divisor_iff_dvd n_pos).mp (divs d d_in)),
+  exact calc
+    finset.sum (divisors n) id ≥ finset.sum ds' id : finset.sum_le_sum_of_subset this
+    ... = (ds.map id).sum : multiset.coe_sum _
+    ... = ds.sum : by rw [list.map_id]
+end
+
+lemma divisor_sum_is_sum {a b : ℕ} : a > 1 -> b > 0 -> σ (a * b) = a * b + b -> b = 1 := begin
+  intros a_gt_1 b_pos eq,
+  have ab_pos := calc 1 ≤ b : b_pos ... < a * b : mul_gt_one a_gt_1 b_pos,
+  by_contra,
+  suffices : σ (a * b) ≥ a * b + b + 1,
+  { linarith },
+  have divs : ∀ d ∈ [a * b, b, 1], d ∣ a * b := by { rintros d (h | h | h | h); rcases h; norm_num },
+  suffices : multiset.nodup [a * b, b, 1],
+  { exact calc
+      σ (a * b) ≥ [a * b, b, 1].sum : divisor_sum_ge _ (by linarith) divs this
+      ... = a * b + b + 1 : by simp },
+  have : a * b ≠ b := ne_of_gt (mul_gt_one a_gt_1 b_pos),
+  have : a * b ≠ 1 := ne_of_gt (by assumption),
+  finish
+end
+
+lemma prime_from_divisor_sum {p : ℕ} : p > 1 → σ (p) = p + 1 -> prime p := begin
+  intros p_gt_1 eq,
+  by_contra np,
+  rcases nat.exists_dvd_of_not_prime p_gt_1 np with ⟨d, d_div_p, d_ne_one, d_ne_p⟩,
+  have : d > 0 := begin
+    suffices : d ≠ 0, { cases d, contradiction, exact nat.succ_pos _ },
+    rcases d_div_p with ⟨k, prod⟩, rintro rfl, apply d_ne_p, simp [prod]
+  end,
+  suffices : σ p ≥ p + d + 1, { linarith },
+  have : multiset.nodup [p, d, 1],
+  { have : p ≠ 1 := ne_of_gt p_gt_1,
+    finish
+  },
+  have divs : ∀ d' ∈ [p, d, 1], d' ∣ p := by { rintros d' (h | h | h | h); rcases h; repeat {norm_num}, assumption },
+  exact calc
+    σ p ≥ [p, d, 1].sum : divisor_sum_ge _ (by linarith) divs this
+    ... = p + d + 1 : by simp
+end
 
 end nat.divisor

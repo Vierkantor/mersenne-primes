@@ -125,4 +125,27 @@ lemma prod_coprime_gcd_left {a b c : ℕ} : c > 0 -> coprime a b -> gcd a c * gc
   exact prod_coprime_gcd
 end
 
+open nat (succ)
+
+@[simp]
+lemma gcd_add {a b : ℕ} : nat.gcd a (a + b) = nat.gcd b a := begin
+  cases a,
+  { simp },
+  cases b,
+  { simp },
+  exact calc
+    nat.gcd (succ a) (succ a + succ b)
+        = nat.gcd (succ b % succ a) (succ a) : by rw [nat.gcd_succ, nat.add_mod_left]
+    ... = nat.gcd (succ b) (succ a) : by rw [←nat.gcd_succ, nat.gcd_comm]
+end
+
+theorem coprime_sub_one {n : ℕ} : n > 0 -> coprime (n - 1) n := begin
+  intro n_pos,
+  cases n,
+  { linarith },
+  exact calc
+    nat.gcd ((n + 1) - 1) (n + 1) = nat.gcd 1 n : by simp
+    ... = 1 : nat.gcd_one_left _
+end
+
 end nat
